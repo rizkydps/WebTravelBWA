@@ -1,0 +1,41 @@
+body {
+    font-family: 'Assistant', sans-serif;
+    background-color: #e4e6eb;
+    color: #072c4d;
+
+}
+
+.navbar-brand {
+    img {
+        max-height: 40px;
+    }
+}
+
+.navbar-light {
+    .navbar-nav {
+        .nav-link {
+            color: #071C4D;
+
+            &.active {
+                font-weight: bold;
+            }
+        }
+    }
+}
+
+.btn-navbar-right {
+    margin-top: -10px !important;
+    margin-bottom: -8px !important;
+    margin-right: -18px !important;
+    border-radius: 0;
+    height: 70px;
+}
+
+.btn-login {
+    background-color: #071C4D;
+    color: #fff;
+
+    &:hover {
+        background-color: #051d53;
+    }
+}
