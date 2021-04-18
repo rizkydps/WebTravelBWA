@@ -1,5 +1,5 @@
 /*
- * Gijgo JavaScript Library v1.9.10
+ * Gijgo JavaScript Library v2.0.0-alpha-1
  * http://gijgo.com/
  *
  * Copyright 2014, 2018 gijgo.com
@@ -14818,7 +14818,7 @@ gj.datepicker.methods = {
             });
             calendar.addEventListener('click', function () {
                 clearTimeout(picker.timeout);
-                document.activeElement !== picker.element && picker.element.focus();
+                //document.activeElement !== picker.element && picker.element.focus(); //breaks datetimepicker
             });
         }
 
@@ -14929,24 +14929,28 @@ gj.datepicker.methods = {
     },
 
     updateHeader: function (calendar, data, date) {
-        var yearEl, dateEl, hour, minute;
+        var yearEl, dateEl, hour, minute,
+            header = calendar.querySelector('[role="header"]');
 
-        if (data.header) {
-            yearEl = calendar.querySelector('[role="header"] [role="year"]');
-            yearEl.classList.remove('selected');
-            yearEl.innerHTML = gj.core.formatDate(date, 'yyyy', data.locale);
+        if (header) {
+            yearEl = header.querySelector('[role="year"]');
+            if (yearEl) {
+                yearEl.classList.remove('selected');
+                yearEl.innerHTML = gj.core.formatDate(date, 'yyyy', data.locale);
+            }
 
-            dateEl = calendar.querySelector('[role="header"] [role="date"]');
+            dateEl = header.querySelector('[role="date"]');
             dateEl.classList.add('selected');
             dateEl.innerHTML = gj.core.formatDate(date, 'ddd, mmm dd', data.locale);
 
-            hour = calendar.querySelector('[role="header"] [role="hour"]');
+            // update hours and minutes for datetimepickers
+            hour = header.querySelector('[role="hour"]');
             if (hour) {
                 hour.classList.remove('selected');
                 hour.innerHTML = gj.core.formatDate(date, 'HH', data.locale);
             }
 
-            minute = calendar.querySelector('[role="header"] [role="minute"]');
+            minute = header.querySelector('[role="minute"]');
             if (minute) {
                 minute.classList.remove('selected');
                 minute.innerHTML = gj.core.formatDate(date, 'MM', data.locale);
@@ -15053,7 +15057,7 @@ gj.datepicker.methods = {
                     cell.setAttribute('month', prevMonth.month);
                     cell.setAttribute('year', prevMonth.year);
                     dayEl.addEventListener('click', gj.datepicker.methods.dayClickHandler(picker, calendar, data, date));
-                    dayEl.addEventListener('mousedown', function (e) { e.stopPropagation() });
+                    dayEl.addEventListener('mousedown', function (e) { e.stopPropagation(); });
                 } else {
                     cell.classList.add('disabled');
                 }
@@ -15411,6 +15415,7 @@ gj.datepicker.methods = {
         return function (e) {
             e && e.stopPropagation();
             gj.datepicker.methods.selectDay(picker, calendar, data, date);
+            gj.datepicker.events.select(picker.element, 'day');
             if (data.footer !== true && data.autoClose !== false) {
                 gj.datepicker.methods.change(picker, calendar, data, date);
             }
@@ -15445,7 +15450,6 @@ gj.datepicker.methods = {
             cell.classList.add('selected');
         }
         gj.datepicker.methods.updateHeader(calendar, data, date);
-        gj.datepicker.events.select(picker.element, 'day');
     },
 
     selectMonth: function (picker, calendar, data, month) {
@@ -15486,9 +15490,6 @@ gj.datepicker.methods = {
             }
 
             switch (calendar.getAttribute('type')) {
-                case 'month':
-                    gj.datepicker.methods.renderMonth(picker, calendar, data);
-                    break;
                 case 'year':
                     gj.datepicker.methods.renderYear(picker, calendar, data);
                     break;
@@ -15497,6 +15498,9 @@ gj.datepicker.methods = {
                     break;
                 case 'century':
                     gj.datepicker.methods.renderCentury(picker, calendar, data);
+                    break;
+                default:
+                    gj.datepicker.methods.renderMonth(picker, calendar, data);
                     break;
             }
 
@@ -15693,14 +15697,14 @@ gj.datepicker.events = {
      *         change: function (e) {
      *             alert('Change is fired');
      *         },
-     *         select: function (e, type) {
-     *             alert('Select from type of "' + type + '" is fired');
+     *         select: function (e) {
+     *             alert('Select from type of "' + e.detail.type + '" is fired');
      *         }
      *     });
      * </script>
      */
     select: function (el, type) {
-        return el.dispatchEvent(new CustomEvent('select', { 'type': type }));
+        return el.dispatchEvent(new CustomEvent('select', { detail: { 'type': type } }));
     },
 
     /**
@@ -16152,11 +16156,11 @@ gj.timepicker.methods = {
 
     },
 
-    initMouse: function (body, input, picker, data) {
-        //body = body.parentNode.replaceChild(body.cloneNode(true), body); // remove all event listeners
-        body.addEventListener('mousedown', gj.timepicker.methods.mouseDownHandler(picker));
-        body.addEventListener('mousemove', gj.timepicker.methods.mouseMoveHandler(input, picker));
-        body.addEventListener('mouseup', gj.timepicker.methods.mouseUpHandler(input, picker));
+    initMouse: function (input, popup, data) {
+        var body = popup.querySelector('[role="body"]');
+        body.addEventListener('mousedown', gj.timepicker.methods.mouseDownHandler(popup));
+        body.addEventListener('mousemove', gj.timepicker.methods.mouseMoveHandler(input, popup, data));
+        body.addEventListener('mouseup', gj.timepicker.methods.mouseUpHandler(input, popup, data));
     },
 
     createPopup: function (picker) {
@@ -16276,7 +16280,7 @@ gj.timepicker.methods = {
             gj.core.center(clock);
         }
 
-        gj.timepicker.methods.initMouse(body, picker, clock, data);
+        gj.timepicker.methods.initMouse(picker, clock, data);
 
         return clock;
     },
@@ -16330,21 +16334,24 @@ gj.timepicker.methods = {
                 value = Math.round(60 - 60 * angle / 360);
                 return value === 60 ? 0 : value;
             }
+            default:
+                throw 'missing timepicker mode.';
         }
     },
 
     updateArrow: function(e, picker, clock, data) {
-        var rect, value,
+        var rect, type, value,
             mouseX = picker.mouseX(e),
             mouseY = picker.mouseY(e),
             scrollY = window.scrollY || window.pageYOffset || 0,
             scrollX = window.scrollX || window.pageXOffset || 0;
 
         rect = e.target.getBoundingClientRect();
-        if (data.dialMode == 'hours') {
+        type = clock.getAttribute('type');
+        if (type === 'hours') {
             value = gj.timepicker.methods.getPointerValue(mouseX - scrollX - rect.left, mouseY - scrollY - rect.top, data.mode);
             clock.setAttribute('hour', data.mode === 'ampm' && clock.getAttribute('mode') === 'pm' && value < 12 ? value + 12 : value);
-        } else if (data.dialMode == 'minutes') {
+        } else if (type === 'minutes') {
             value = gj.timepicker.methods.getPointerValue(mouseX - scrollX - rect.left, mouseY - scrollY - rect.top, 'minutes');
             clock.setAttribute('minute', value);
         }
@@ -16353,19 +16360,20 @@ gj.timepicker.methods = {
     },
 
     update: function (picker, clock, data) {
-        var hour, minute, arrow, visualHour, header, numbers, i, number;
+        var hour, minute, arrow, type, visualHour, header, numbers, i, number;
 
         // update the arrow
         hour = gj.timepicker.methods.getHour(clock);
         minute = gj.timepicker.methods.getMinute(clock);
         arrow = clock.querySelector('[role="arrow"]');
-        if (data.dialMode == 'hours' && (hour == 0 || hour > 12) && data.mode === '24hr') {
+        type = clock.getAttribute('type');
+        if (type === 'hours' && (hour == 0 || hour > 12) && data.mode === '24hr') {
             arrow.style.width = 'calc(50% - 52px)';
         } else {
             arrow.style.width = 'calc(50% - 20px)';
         }
 
-        if (data.dialMode == 'hours') {
+        if (type === 'hours') {
             arrow.style.transform = 'rotate(' + ((hour * 30) - 90).toString() + 'deg)';
         } else {
             arrow.style.transform = 'rotate(' + ((minute * 6) - 90).toString() + 'deg)';
@@ -16377,9 +16385,9 @@ gj.timepicker.methods = {
         numbers = clock.querySelectorAll('[role="body"] span');
         for (i = 0; i < numbers.length; i++) {
             number = parseInt(numbers[i].innerText, 10);
-            if (data.dialMode === 'hours' && number === visualHour) {
+            if (type === 'hours' && number === visualHour) {
                 numbers[i].classList.add('selected');
-            } else if (data.dialMode === 'minutes' && number === minute) {
+            } else if (type === 'minutes' && number === minute) {
                 numbers[i].classList.add('selected');
             } else {
                 numbers[i].classList.remove('selected');
@@ -16409,36 +16417,37 @@ gj.timepicker.methods = {
         };
     },
 
-    mouseMoveHandler: function (picker, clock) {
+    mouseMoveHandler: function (picker, clock, data) {
         return function (e) {
-            var data = gijgoStorage.get(picker.element, 'gijgo');
             if (picker.mouseMove) {
                 gj.timepicker.methods.updateArrow(e, picker, clock, data);
             }
         };
     },
 
-    mouseUpHandler: function (picker, clock) {
+    mouseUpHandler: function (picker, clock, data) {
         return function (e) {
-            var data = gijgoStorage.get(picker.element, 'gijgo');
-            gj.timepicker.methods.updateArrow(e, picker, clock, data);
-            picker.mouseMove = false;
-            if (!data.modal) {
-                clearTimeout(picker.timeout);
-                picker.element.focus();
-            }
-            if (data.dialMode === 'hours') {
-                setTimeout(function () {
-                    gj.timepicker.events.select(picker.element, 'hour');
-                    gj.timepicker.methods.renderMinutes(picker, clock, data);
-                }, 1000);
-            } else if (data.dialMode === 'minutes') {
-                if (data.footer !== true && data.autoClose !== false) {
-                    gj.timepicker.methods.setTime(picker, clock)();
+            var type = clock.getAttribute('type');
+            if (type === 'hours' || type === 'minutes') {
+                gj.timepicker.methods.updateArrow(e, picker, clock, data);
+                picker.mouseMove = false;
+                if (!data.modal) {
+                    clearTimeout(picker.timeout);
+                    picker.element.focus();
                 }
-                gj.timepicker.events.select(picker.element, 'minute');
+                if (type === 'hours') {
+                    setTimeout(function () {
+                        gj.timepicker.events.select(picker.element, 'hour');
+                        gj.timepicker.methods.renderMinutes(picker, clock, data);
+                    }, 1000);
+                } else if (type === 'minutes') {
+                    if (data.footer !== true && data.autoClose !== false) {
+                        gj.timepicker.methods.setTime(picker, clock)();
+                    }
+                    gj.timepicker.events.select(picker.element, 'minute');
+                }
             }
-        }
+        };
     },
 
     renderHours: function (picker, clock, data) {
@@ -16487,7 +16496,7 @@ gj.timepicker.methods = {
             clock.querySelector('[role="header"] [role="minute"]').classList.remove('selected');
         }
 
-        data.dialMode = 'hours';
+        clock.setAttribute('type', 'hours');
 
         gj.timepicker.methods.update(picker, clock, data);
     },
@@ -16527,13 +16536,23 @@ gj.timepicker.methods = {
             clock.querySelector('[role="header"] [role="minute"]').classList.add('selected');
         }
         
-        data.dialMode = 'minutes';
+        clock.setAttribute('type', 'minutes');
 
         gj.timepicker.methods.update(picker, clock, data);
     },
 
+    setAttributes: function (popup, data, date) {
+        var hour = date.getHours();
+        if (data.mode === 'ampm') {
+            popup.setAttribute('mode', hour > 12 ? 'pm' : 'am');
+        }
+        popup.setAttribute('hour', hour);
+        popup.setAttribute('minute', date.getMinutes());
+
+    },
+
     open: function (picker) {
-        var time, hour, data = gijgoStorage.get(picker.element, 'gijgo'),
+        var time, data = gijgoStorage.get(picker.element, 'gijgo'),
             clock = document.body.querySelector('[role="picker"][guid="' + picker.element.getAttribute('data-guid') + '"]');
 
         if (picker.value()) {
@@ -16541,12 +16560,8 @@ gj.timepicker.methods = {
         } else {
             time = new Date();
         }
-        hour = time.getHours();
-        if (data.mode === 'ampm') {
-            clock.setAttribute('mode', hour > 12 ? 'pm' : 'am');
-        }
-        clock.setAttribute('hour', hour);
-        clock.setAttribute('minute', time.getMinutes());
+
+        gj.timepicker.methods.setAttributes(clock, data, time);
 
         gj.timepicker.methods.renderHours(picker, clock, data);
 
@@ -16555,7 +16570,6 @@ gj.timepicker.methods = {
     },
 
     value: function (picker, value) {
-        var clock, time, data = gijgoStorage.get(picker.element, 'gijgo');
         if (typeof (value) === "undefined") {
             return picker.element.value;
         } else {
@@ -16602,14 +16616,14 @@ gj.timepicker.events = {
      *         change: function (e) {
      *             alert('Change is fired');
      *         },
-     *         select: function (e, type) {
-     *             alert('Select from type of "' + type + '" is fired');
+     *         select: function (e) {
+     *             alert('Select from type of "' + e.detail.type + '" is fired');
      *         }
      *     });
      * </script>
      */
     select: function (el, type) {
-        return el.dispatchEvent(new CustomEvent('select', { 'type': type }));
+        return el.dispatchEvent(new CustomEvent('select', { detail: { 'type': type } }));
     },
 
     /**
@@ -16822,10 +16836,10 @@ gj.datetimepicker.config = {
          * @example Javascript <!-- nojquery, datetimepicker -->
          * <input id="picker" width="300" />
          * <script>
-         *    new GijgoDateTimePicker(document.getElementById('picker'), { value: '22:10 03/27/2018' });
+         *    new GijgoDateTimePicker(document.getElementById('picker'), { value: '22:10 03/27/2020' });
          * </script>
          * @example HTML <!-- nojquery, datetimepicker -->
-         * <input id="picker" width="300" value="22:10 03/27/2018" />
+         * <input id="picker" width="300" value="22:10 03/27/2020" />
          * <script>
          *     new GijgoDateTimePicker(document.getElementById('picker'));
          * </script>
@@ -17063,17 +17077,17 @@ gj.datetimepicker.methods = {
 
         popup = document.body.querySelector('[role="picker"][guid="' + picker.element.getAttribute('data-guid') + '"]');
 
-        picker.element.addEventListener('select', function (e, type) {
-            var selectedDay, value;
-            if (type === 'day') {
-                gj.datetimepicker.methods.createShowHourHandler($datetimepicker, $picker, data)();
-            } else if (type === 'minute') {
-                if (picker.element.getAttribute('selectedDay') && data.footer !== true) {
-                    selectedDay = picker.element.getAttribute('selectedDay').split('-');
-                    date = new Date(selectedDay[0], selectedDay[1], selectedDay[2], picker.element.getAttribute('hour') || 0, picker.element.getAttribute('minute') || 0);
+        picker.element.addEventListener('select', function (e) {
+            var selectedDay, date, value;
+            if (e.detail.type === 'day') {
+                gj.datetimepicker.methods.createShowHourHandler(picker, popup, data)();
+            } else if (e.detail.type === 'minute') {
+                if (popup.getAttribute('selectedDay') && data.footer !== true) {
+                    selectedDay = popup.getAttribute('selectedDay').split('-');
+                    date = new Date(selectedDay[0], selectedDay[1], selectedDay[2], popup.getAttribute('hour') || 0, popup.getAttribute('minute') || 0);
                     value = gj.core.formatDate(date, data.format, data.locale);
                     picker.element.value = value;
-                    gj.datetimepicker.events.change(picker);
+                    gj.datetimepicker.events.change(picker.element);
                     gj.datetimepicker.methods.close(picker);
                 }
             }
@@ -17098,6 +17112,7 @@ gj.datetimepicker.methods = {
         data.timepicker.size = data.size;
         data.timepicker.mode = '24hr';
         data.timepicker.autoClose = false;
+        gj.timepicker.methods.initMouse(picker, popup, data.timepicker);
 
         // Init header
         headerEl = document.createElement('div');
@@ -17138,7 +17153,6 @@ gj.datetimepicker.methods = {
         timeEl.appendChild(minuteEl);
         switchEl.appendChild(timeEl);
         
-
         clockMode = document.createElement('i');
         clockMode.classList.add('gj-icon');
         clockMode.setAttribute('role', 'clockMode');
@@ -17152,10 +17166,10 @@ gj.datetimepicker.methods = {
     },
 
     createShowDateHandler: function (picker, clock, data) {
-        return function (e) {
+        return function () {
             var header = clock.querySelector('[role="header"]');
-            header.querySelector('[role="calendarMode"]').classList.add('selected');
             header.querySelector('[role="date"]').classList.add('selected');
+            header.querySelector('[role="calendarMode"]').classList.add('selected');
             header.querySelector('[role="clockMode"]').classList.remove('selected');
             header.querySelector('[role="hour"]').classList.remove('selected');
             header.querySelector('[role="minute"]').classList.remove('selected');
@@ -17163,17 +17177,16 @@ gj.datetimepicker.methods = {
         };
     },
 
-    createShowHourHandler: function (picker, clock, data) {
+    createShowHourHandler: function (picker, popup, data) {
         return function () {
-            var header = clock.querySelector('[role="header"]');
+            var header = popup.querySelector('[role="header"]');
             header.querySelector('[role="calendarMode"]').classList.remove('selected');
             header.querySelector('[role="date"]').classList.remove('selected');
             header.querySelector('[role="clockMode"]').classList.add('selected');
             header.querySelector('[role="hour"]').classList.add('selected');
             header.querySelector('[role="minute"]').classList.remove('selected');
 
-            gj.timepicker.methods.initMouse(clock.querySelector('[role="body"]'), picker, clock, data.timepicker);
-            gj.timepicker.methods.renderHours(picker, clock, data.timepicker);
+            gj.timepicker.methods.renderHours(picker, popup, data.timepicker);
         };
     },
 
@@ -17185,7 +17198,7 @@ gj.datetimepicker.methods = {
             header.querySelector('[role="clockMode"]').classList.add('selected');
             header.querySelector('[role="hour"]').classList.remove('selected');
             header.querySelector('[role="minute"]').classList.add('selected');
-            gj.timepicker.methods.initMouse(clock.querySelector('[role="body"]'), picker, clock, data.timepicker);
+
             gj.timepicker.methods.renderMinutes(picker, clock, data.timepicker);
         };
     },
@@ -17195,22 +17208,16 @@ gj.datetimepicker.methods = {
     },
 
     value: function (picker, value) {
-        var $calendar, date, hour,
+        var clock, date, hour,
             data = gijgoStorage.get(picker.element, 'gijgo');
         if (typeof value === "undefined") {
             return picker.element.value;
         } else {
             date = gj.core.parseDate(value, data.format, data.locale);
             if (date) {
-                clock = document.body.querySelector('[role="picker"][guid="' + picker.element.getAttribute('data-guid') + '"]');
-                gj.datepicker.methods.dayClickHandler(picker, clock, data, date)();
-                // Set Time
-                hour = date.getHours();
-                if (data.mode === 'ampm') {
-                    clock.setAttribute('mode', hour > 12 ? 'pm' : 'am');
-                }
-                clock.setAttribute('hour', hour);
-                clock.setAttribute('minute', date.getMinutes());
+                clock = document.body.querySelector('[role="picker"][guid="' + picker.element.getAttribute('data-guid') + '"]');                
+                gj.datepicker.methods.selectDay(picker, clock, data.datepicker, date);
+                gj.timepicker.methods.setAttributes(clock, data.timepicker, date);
                 picker.element.value = value;
             } else {
                 picker.element.value = '';
@@ -17230,7 +17237,8 @@ gj.datetimepicker.events = {
      *
      * @event change
      * @param {object} e - event data
-    * @example sample <!--nojquery, datetimepicker -->
+     * @return Boolean
+     * @example sample <!--nojquery, datetimepicker -->
      * <input id="input" width="312" />
      * <script>
      *     new GijgoDateTimePicker(document.getElementById('picker'), {
@@ -17261,12 +17269,12 @@ GijgoDateTimePicker = function (element, jsConfig) {
      * @example Get <!-- nojquery, datetimepicker -->
      * <button class="gj-button-md" onclick="alert(datetimepicker.value())">Get Value</button>
      * <hr/>
-     * <input id="picker" width="312" value="17:50 03/27/2018" />
+     * <input id="picker" width="312" value="17:50 03/27/2020" />
      * <script>
      *     var datetimepicker = new GijgoDateTimePicker(document.getElementById('picker'));
      * </script>
      * @example Set <!-- nojquery, datetimepicker -->
-     * <button class="gj-button-md" onclick="datetimepicker.value('13:40 08/01/2017')">Set Value</button>
+     * <button class="gj-button-md" onclick="datetimepicker.value('13:40 08/01/2020')">Set Value</button>
      * <hr/>
      * <input id="picker" width="312" />
      * <script>
@@ -17311,7 +17319,7 @@ GijgoDateTimePicker = function (element, jsConfig) {
 
     /** Remove datetimepicker functionality from the element.
      * @method
-     * @return jquery element
+     * @return datetimepicker
      * @example sample <!-- nojquery, datetimepicker -->
      * <button class="gj-button-md" onclick="picker.destroy()">Destroy</button>
      * <input id="picker" width="312" />
